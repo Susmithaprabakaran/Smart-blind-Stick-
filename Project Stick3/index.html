@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Smart Detection Command System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+  <div class="noise-overlay"></div>
+
+  <!-- ═══════════ TOP BAR ═══════════ -->
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8" stroke-dasharray="4 2"/>
+          <line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/>
+          <line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-name">Smart blind stick <span></span></div>
+        <div class="brand-sub">Smart Blind Stick · Detection Command System v2.0</div>
+      </div>
+    </div>
+    <div class="topbar-pills">
+      <span class="tpill" id="modelStatus">⟳ LOADING MODEL…</span>
+      <span class="tpill tpill-fps" id="fpsBadge">-- FPS</span>
+      <span class="tpill tpill-src" id="srcBadge">SRC: --</span>
+      <span class="tpill tpill-obj" id="objBadge">0 OBJ</span>
+      <div class="live-dot" id="liveDot"></div>
+    </div>
+  </header>
+
+  <!-- ═══════════ TABS ═══════════ -->
+  <nav class="main-tabs">
+    <button class="mtab active" data-tab="detection">⬡ Detection</button>
+    <button class="mtab" data-tab="history">⊞ Command History</button>
+    <button class="mtab" data-tab="analytics">◈ Data Analytics</button>
+  </nav>
+
+  <!-- ═══════════ DETECTION TAB ═══════════ -->
+  <div class="tab-pane active" id="tab-detection">
+    <div class="layout">
+
+      <!-- LEFT -->
+      <aside class="panel panel-left">
+        <div class="panel-label">CAMERA SOURCE</div>
+
+        <div class="source-tabs">
+          <button class="stab active" data-source="webcam" id="tabWebcam">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="12" cy="12" r="4"/></svg>
+            Laptop Webcam
+          </button>
+          <button class="stab" data-source="esp32" id="tabEsp32">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="14" rx="2"/><circle cx="12" cy="13" r="3"/><path d="M8 6l1.5-3h5L16 6"/></svg>
+            ESP32-CAM
+          </button>
+        </div>
+
+        <!-- Webcam -->
+        <div id="webcamPanel">
+          <div class="panel-label" style="margin-top:14px">FACING MODE</div>
+          <select class="sel" id="facingMode">
+            <option value="user">Front Camera</option>
+            <option value="environment" selected>Rear Camera</option>
+          </select>
+        </div>
+
+        <!-- ESP32 -->
+        <div id="esp32Panel" class="hidden">
+          <div class="panel-label" style="margin-top:14px">ESP32-CAM STREAM URL</div>
+          <input class="inp" type="text" id="esp32Url" placeholder="http://192.168.1.x:81/stream"/>
+          <div class="hint">Paste your ESP32-CAM MJPEG stream URL above. Default port is 81. Make sure your device and ESP32 are on the same WiFi network.</div>
+          <button class="btn btn-connect" id="connectEspBtn">⚡ CONNECT ESP32</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="actions">
+          <button class="btn btn-start" id="startBtn">▶ START</button>
+          <button class="btn btn-stop" id="stopBtn" disabled>■ STOP</button>
+        </div>
+
+        <button class="btn btn-download-video" id="downloadVideoBtn" disabled>
+          ⬇ DOWNLOAD RECORDING
+        </button>
+
+        <div class="divider"></div>
+
+        <div class="panel-label">DETECTION OPTIONS</div>
+        <div class="toggle-group">
+          <label class="tog">
+            <input type="checkbox" id="useTypeLogic" checked/>
+            <span class="tog-track"><span class="tog-thumb"></span></span>
+            <span>Classify by object type</span>
+          </label>
+          <label class="tog">
+            <input type="checkbox" id="useSizeLogic" checked/>
+            <span class="tog-track"><span class="tog-thumb"></span></span>
+            <span>Classify by proximity/size</span>
+          </label>
+          <label class="tog">
+            <input type="checkbox" id="useSpeech" checked/>
+            <span class="tog-track"><span class="tog-thumb"></span></span>
+            <span>Voice announcements</span>
+          </label>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="panel-label">CONFIDENCE THRESHOLD</div>
+        <div class="slider-row">
+          <input type="range" id="confSlider" min="10" max="90" value="55" class="slider-inp"/>
+          <span class="slider-val" id="confVal">55%</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="panel-label">LIVE EVENT LOG</div>
+        <div class="log-feed" id="logFeed"></div>
+      </aside>
+
+      <!-- CENTER -->
+      <section class="panel panel-center">
+        <div class="stage" id="stage">
+          <video id="video" autoplay muted playsinline></video>
+          <img id="esp32Img" crossorigin="anonymous" alt="ESP32 stream" style="display:none"/>
+          <canvas id="overlay"></canvas>
+
+          <div id="statusOverlay" class="status-overlay">
+            <div class="so-icon">
+              <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10" stroke-dasharray="4 3"/>
+                <circle cx="12" cy="12" r="4"/>
+                <line x1="2" y1="12" x2="8" y2="12"/>
+                <line x1="16" y1="12" x2="22" y2="12"/>
+                <line x1="12" y1="2" x2="12" y2="8"/>
+                <line x1="12" y1="16" x2="12" y2="22"/>
+              </svg>
+            </div>
+            <div class="so-title">VISION</div>
+            <div class="so-sub">Select a source &amp; press <strong>START</strong> to begin detection</div>
+          </div>
+
+          <div id="commandBanner" class="cmd-banner hidden">
+            <div class="cmd-icon" id="cmdIcon">●</div>
+            <div class="cmd-text" id="cmdText">MOVE</div>
+            <div class="cmd-reason" id="cmdReason">path clear</div>
+          </div>
+
+          <div class="hud hud-tl" id="recHud">⏺ REC</div>
+          <div class="hud hud-tr" id="resBadge">-- × --</div>
+          <div class="hud hud-bl" id="timeBadge">00:00</div>
+          <div class="hud hud-br" id="srcHud">WEBCAM</div>
+        </div>
+
+        <!-- Person safety badge (real-time) -->
+        <div class="person-safety-bar" id="personSafety" style="display:none">
+          <div class="ps-label">PERSON STATUS</div>
+          <div class="ps-status" id="psStatus">—</div>
+          <div class="ps-reason" id="psReason"></div>
+        </div>
+      </section>
+
+      <!-- RIGHT -->
+      <aside class="panel panel-right">
+        <div class="panel-label">CURRENT COMMAND</div>
+        <div class="big-cmd-card" id="bigCmdCard">
+          <div class="bcc-indicator" id="bccIndicator"></div>
+          <div class="bcc-value" id="bccValue">IDLE</div>
+          <div class="bcc-meta" id="bccMeta">awaiting input…</div>
+          <div class="bcc-conf-bar"><div class="bcc-conf-fill" id="bccConfFill"></div></div>
+        </div>
+
+        <div class="mini-cards">
+          <div class="mini-card mc-move" id="mcMove">
+            <div class="mc-dot"></div>
+            <div>
+              <div class="mc-name">MOVE</div>
+              <div class="mc-val" id="mcMoveVal">--</div>
+            </div>
+          </div>
+          <div class="mini-card mc-stop" id="mcStop">
+            <div class="mc-dot"></div>
+            <div>
+              <div class="mc-name">STOP</div>
+              <div class="mc-val" id="mcStopVal">--</div>
+            </div>
+          </div>
+          <div class="mini-card mc-danger" id="mcDanger">
+            <div class="mc-dot"></div>
+            <div>
+              <div class="mc-name">DANGER</div>
+              <div class="mc-val" id="mcDangerVal">--</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-label" style="margin-top:18px">DETECTED OBJECTS</div>
+        <ul class="obj-list" id="objectsList"><li class="muted-li">— none —</li></ul>
+
+        <div class="panel-label" style="margin-top:18px">SESSION STATS</div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-val" id="statTotal">0</div>
+            <div class="stat-lbl">Commands</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="statDanger">0</div>
+            <div class="stat-lbl">Danger</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="statStop">0</div>
+            <div class="stat-lbl">Stop</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-val" id="statMove">0</div>
+            <div class="stat-lbl">Move</div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- ═══════════ HISTORY TAB ═══════════ -->
+  <div class="tab-pane" id="tab-history">
+    <div class="tab-toolbar">
+      <div class="tt-left">
+        <span class="panel-label" style="margin:0">COMMAND HISTORY</span>
+        <span class="badge-count" id="historyCount">0 records</span>
+      </div>
+      <div class="tt-right">
+        <input class="inp inp-sm" type="text" id="historySearch" placeholder="Search by object or command…"/>
+        <select class="sel sel-sm" id="historyFilter">
+          <option value="all">All Commands</option>
+          <option value="DANGER">Danger Only</option>
+          <option value="STOP">Stop Only</option>
+          <option value="MOVE">Move Only</option>
+        </select>
+        <button class="btn btn-dl btn-sm" id="downloadHistoryBtn">⬇ Export CSV</button>
+        <button class="btn btn-clear btn-sm" id="clearHistoryBtn">✕ Clear</button>
+      </div>
+    </div>
+
+    <div class="history-table-wrap">
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Time</th>
+            <th>Command</th>
+            <th>Detected Object</th>
+            <th>Confidence</th>
+            <th>Proximity %</th>
+            <th>Person Safety</th>
+            <th>Duration (s)</th>
+            <th>Direction</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody">
+          <tr class="empty-row"><td colspan="9">No history yet — start detection to record events.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══════════ ANALYTICS TAB ═══════════ -->
+  <div class="tab-pane" id="tab-analytics">
+    <div class="tab-toolbar">
+      <div class="tt-left">
+        <span class="panel-label" style="margin:0">DATA ANALYTICS</span>
+      </div>
+      <div class="tt-right">
+        <button class="btn btn-dl btn-sm" id="downloadAnalyticsBtn">⬇ Export Report</button>
+        <button class="btn btn-dl btn-sm" id="downloadChartsBtn">⬇ Export Charts PNG</button>
+      </div>
+    </div>
+
+    <div class="analytics-grid">
+      <!-- Summary cards -->
+      <div class="an-card an-card-full">
+        <div class="an-summary">
+          <div class="an-sum-box danger-box">
+            <div class="an-sum-val" id="anTotalDanger">0</div>
+            <div class="an-sum-lbl">⚠ Total Danger Events</div>
+          </div>
+          <div class="an-sum-box stop-box">
+            <div class="an-sum-val" id="anTotalStop">0</div>
+            <div class="an-sum-lbl">⬛ Total Stop Events</div>
+          </div>
+          <div class="an-sum-box move-box">
+            <div class="an-sum-val" id="anTotalMove">0</div>
+            <div class="an-sum-lbl">● Total Move Events</div>
+          </div>
+          <div class="an-sum-box safe-box">
+            <div class="an-sum-val" id="anPersonSafe">0</div>
+            <div class="an-sum-lbl">✓ Person Safe Events</div>
+          </div>
+          <div class="an-sum-box unsafe-box">
+            <div class="an-sum-val" id="anPersonUnsafe">0</div>
+            <div class="an-sum-lbl">✗ Person Unsafe Events</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Doughnut -->
+      <div class="an-card">
+        <div class="an-card-title">Command Distribution</div>
+        <div class="chart-wrap"><canvas id="chartDonut"></canvas></div>
+      </div>
+
+      <!-- Line -->
+      <div class="an-card">
+        <div class="an-card-title">Commands Over Time</div>
+        <div class="chart-wrap"><canvas id="chartLine"></canvas></div>
+      </div>
+
+      <!-- Bar: top objects -->
+      <div class="an-card">
+        <div class="an-card-title">Top Detected Objects</div>
+        <div class="chart-wrap"><canvas id="chartBar"></canvas></div>
+      </div>
+
+      <!-- Bar: person safety -->
+      <div class="an-card">
+        <div class="an-card-title">Person Safety Analysis</div>
+        <div class="chart-wrap"><canvas id="chartSafety"></canvas></div>
+      </div>
+
+      <!-- Confidence scatter -->
+      <div class="an-card an-card-full">
+        <div class="an-card-title">Confidence Score Distribution</div>
+        <div class="chart-wrap chart-wrap-wide"><canvas id="chartConf"></canvas></div>
+      </div>
+
+      <!-- Table: per-object analytics -->
+      <div class="an-card an-card-full">
+        <div class="an-card-title">Per-Object Analytics Table</div>
+        <div class="history-table-wrap" style="max-height:280px">
+          <table class="history-table">
+            <thead>
+              <tr><th>Object</th><th>Count</th><th>Danger</th><th>Stop</th><th>Move</th><th>Avg Confidence</th><th>Avg Proximity</th><th>Safety Risk %</th></tr>
+            </thead>
+            <tbody id="analyticsBody">
+              <tr class="empty-row"><td colspan="8">No data yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
