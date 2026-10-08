@@ -36,8 +36,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          # Upload entire repository
-          path: '.project Stick3'
+          # Publish the website from its project folder
+          path: 'Project Stick3'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
